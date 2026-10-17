@@ -28,6 +28,19 @@ compile the original code.
 
 Neither ROS nor Docker is required on either.
 
+## Quick install
+
+`scripts/install.sh` runs every step below: it installs the missing apt
+packages (with `sudo`), creates the venv, then configures, builds, installs
+and runs CTest.
+
+```bash
+scripts/install.sh            # see --help for --prefix, --build-dir, --venv, --jobs
+```
+
+`--skip-apt` only checks the apt packages, for machines where they are already
+installed or `sudo` is unavailable.
+
 ## Dependencies
 
 Ubuntu 26.04:
