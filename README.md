@@ -85,8 +85,10 @@ ctest --output-on-failure
 
 Run the installed commands with the venv on `PATH`
 (`source ~/.venvs/kalibr/bin/activate`). The install is relocatable and
-contains only the two phase-one commands. It does not need a sourced ROS
-environment.
+contains the two phase-one calibration commands plus the offline viewers
+`kalibr_visualize_calibration` (camera/IMU frames in 3D) and
+`kalibr_visualize_distortion` (distortion overlay; radtan, equi and fov
+only, not `radtan5`). It does not need a sourced ROS environment.
 
 ### Self-test without a dataset
 

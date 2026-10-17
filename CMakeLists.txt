@@ -173,6 +173,11 @@ function(prepare_cli name)
       "                 'ds-none':        acvb.DoubleSphere,\n                 'pinhole-radtan5': kr5.PinholeRadtan5}"
       content "${content}")
   endif()
+  if(name MATCHES "^kalibr_visualize_")
+    # Lets the config reader accept radtan5 camchains.
+    string(REPLACE "import sm\n" "import sm\nimport kalibr_radtan5 as kr5\nkr5.install()\n"
+      content "${content}")
+  endif()
   file(WRITE "${KALIBR_LIBEXEC_DIR}/${name}" "${content}")
   file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/scripts/kalibr_launcher.py"
     DESTINATION "${CMAKE_BINARY_DIR}/bin")
@@ -185,14 +190,15 @@ endfunction()
 
 prepare_cli(kalibr_calibrate_cameras)
 prepare_cli(kalibr_calibrate_imu_camera)
+prepare_cli(kalibr_visualize_calibration)
+prepare_cli(kalibr_visualize_distortion)
 
-# Phase 1 intentionally installs only the two offline calibration commands.
+# Only the offline calibration and visualization commands are installed.
 # Remove stale programs left by an earlier install tree when reconfiguring.
 install(CODE [[
   foreach(program IN ITEMS
       kalibr_bagcreater kalibr_camera_focus kalibr_bagextractor
-      kalibr_camera_validator kalibr_visualize_calibration
-      kalibr_visualize_distortion kalibr_create_target_pdf
+      kalibr_camera_validator kalibr_create_target_pdf
       kalibr_calibrate_rs_cameras)
     file(REMOVE "${CMAKE_INSTALL_PREFIX}/bin/${program}")
   endforeach()

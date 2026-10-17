@@ -17,7 +17,9 @@
   synchronization, cropping, frequency selection, and in-place shuffle
   semantics.
 - Phase-one installed commands are `kalibr_calibrate_cameras` and
-  `kalibr_calibrate_imu_camera`.
+  `kalibr_calibrate_imu_camera`. The offline viewers
+  `kalibr_visualize_calibration` and `kalibr_visualize_distortion` are also
+  installed; they read only camchain YAML files.
 - An out-of-tree `pinhole-radtan5` model optimizes OpenCV-order
   `[k1, k2, p1, p2, k3]` using native Kalibr design variables and analytic
   Jacobians. It is available to both phase-one commands without changing the
