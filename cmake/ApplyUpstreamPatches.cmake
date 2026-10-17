@@ -24,7 +24,11 @@ function(kalibr_apply_upstream_patches pristine destination patch_dir)
     endif()
   endif()
 
-  find_program(KALIBR_PATCH_EXECUTABLE patch REQUIRED)
+  # find_program(... REQUIRED) needs CMake 3.18; Ubuntu 20.04 ships 3.16.
+  find_program(KALIBR_PATCH_EXECUTABLE patch)
+  if(NOT KALIBR_PATCH_EXECUTABLE)
+    message(FATAL_ERROR "The 'patch' program is required to prepare upstream Kalibr")
+  endif()
   message(STATUS "Preparing patched upstream Kalibr in ${destination}")
   file(REMOVE_RECURSE "${destination}")
   get_filename_component(parent "${destination}" DIRECTORY)
