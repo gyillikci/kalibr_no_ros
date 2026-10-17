@@ -14,36 +14,86 @@ The repository contains two intentionally separate packages:
 
 The copy below `upstream/kalibr` is immutable. No-ROS changes live outside the
 snapshot so that algorithm changes cannot be hidden in a porting patch.
+Toolchain portability fixes for newer distributions are kept as small,
+reviewed patches in [`patches/`](patches); CMake applies them to a copy of the
+snapshot in the build tree. Each patch is guarded so that older toolchains
+compile the original code.
+
+## Supported platforms
+
+| Ubuntu | Python | Boost | SuiteSparse | NumPy | CMake | Status |
+| --- | --- | --- | --- | --- | --- | --- |
+| 20.04 | 3.8 | 1.71 | 5.7 | 1.17 | 3.16 | Original validation baseline (EuRoC, see `docs/STATUS.md`) |
+| 26.04 | 3.14 | 1.90 | 7.12 | 2.3 | 4.2 | Build, CTest and synthetic end-to-end calibration (see `docs/UBUNTU_26_04.md`) |
+
+Neither ROS nor Docker is required on either.
 
 ## Dependencies
 
-The native build is currently validated on Ubuntu 20.04 with Python 3.8,
-OpenCV 4.2, Boost 1.71, Eigen 3, SuiteSparse, TBB, and NumPy. Install the
-ROS-free Python bag dependency with:
+Ubuntu 26.04:
 
 ```bash
-python3 -m pip install --user 'rosbags>=0.9.20,<0.10'
+sudo apt install build-essential cmake git patch \
+  python3-dev python3-venv python3-numpy python3-opencv python3-matplotlib \
+  python3-scipy python3-yaml python3-igraph python3-wxgtk4.0 python3-pil \
+  libboost-all-dev libopencv-dev libeigen3-dev libsuitesparse-dev libtbb-dev \
+  libv4l-dev
+
+# Ubuntu 23.04+ forbids pip installs into the system Python (PEP 668).
+# A venv that can see the apt packages keeps OpenCV, NumPy and wx from apt.
+python3 -m venv --system-site-packages ~/.venvs/kalibr
+~/.venvs/kalibr/bin/pip install 'rosbags>=0.9.20,<0.10'
 ```
 
+On Ubuntu 20.04 the same apt packages apply (`python3-wxgtk4.0` included);
+`rosbags` can be installed with `python3 -m pip install --user` instead of a
+venv.
+
+wxPython is needed even with `--dont-show-report`, because
+`kalibr_calibrate_cameras` imports `sm.PlotCollection` at startup.
 OpenCV is consumed from the system Python installation (`python3-opencv`), so
 no wheel-specific OpenCV ABI is introduced.
 
 ## Build and test
 
-From this repository:
+From this repository, with the venv's interpreter so CMake builds the Python
+extensions for the same Python that will run them:
 
 ```bash
 cmake -S . -B build/linux-release \
   -DCMAKE_BUILD_TYPE=Release \
-  -DCMAKE_INSTALL_PREFIX="$PWD/install"
+  -DCMAKE_INSTALL_PREFIX="$PWD/install" \
+  -DPYTHON_EXECUTABLE="$HOME/.venvs/kalibr/bin/python"
 cmake --build build/linux-release --parallel 4
 cmake --install build/linux-release
 cd build/linux-release
 ctest --output-on-failure
 ```
 
-The install is relocatable and contains only the two phase-one commands. It
-does not need a sourced ROS environment.
+Run the installed commands with the venv on `PATH`
+(`source ~/.venvs/kalibr/bin/activate`). The install is relocatable and
+contains only the two phase-one commands. It does not need a sourced ROS
+environment.
+
+### Self-test without a dataset
+
+`scripts/make_synthetic_aprilgrid_bag.py` renders Kalibr's AprilGrid as seen by
+a camera with known intrinsics (and, with `--imu`, an IMU with a known
+camera-IMU transform) into a bag. A working build recovers the ground truth:
+
+```bash
+python scripts/make_synthetic_aprilgrid_bag.py /tmp/syn/cam.bag \
+  --target /tmp/syn/april_6x6.yaml --truth /tmp/syn/truth.yaml
+cd /tmp/syn && kalibr_calibrate_cameras --target april_6x6.yaml \
+  --models pinhole-radtan --topics /cam0/image_raw --bag cam.bag \
+  --no-shuffle --dont-show-report
+
+python scripts/make_synthetic_aprilgrid_bag.py /tmp/syn/imu.bag --imu \
+  --frames 800 --rate 20 \
+  --target /tmp/syn/april_6x6.yaml --truth /tmp/syn/camchain_truth.yaml
+cd /tmp/syn && kalibr_calibrate_imu_camera --target april_6x6.yaml \
+  --imu imu.yaml --cams camchain_truth.yaml --bag imu.bag --dont-show-report
+```
 
 ## Run
 

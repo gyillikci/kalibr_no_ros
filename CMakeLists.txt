@@ -266,6 +266,9 @@ if(KALIBR_BUILD_NATIVE)
   add_subdirectory(${KALIBR_UPSTREAM}/aslam_incremental_calibration/incremental_calibration native/incremental_calibration)
   add_subdirectory(${KALIBR_UPSTREAM}/aslam_incremental_calibration/incremental_calibration_python native/incremental_calibration_python)
   add_subdirectory(${KALIBR_UPSTREAM}/aslam_offline_calibration/kalibr native/kalibr)
+  # Upstream installs only ${kalibr_TARGETS}, which lists the Python export
+  # library but not the C++ error terms it links against.
+  install(TARGETS kalibr_errorterms LIBRARY DESTINATION lib)
 endif()
 
 enable_testing()
