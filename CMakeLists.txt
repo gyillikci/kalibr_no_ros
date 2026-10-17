@@ -9,7 +9,9 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(BUILD_SHARED_LIBS ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 set(CMAKE_BUILD_RPATH "${CMAKE_BINARY_DIR};${CMAKE_BINARY_DIR}/lib")
-set(CMAKE_INSTALL_RPATH "$ORIGIN;$ORIGIN/../lib;$ORIGIN/../../lib")
+# Native libraries install to lib/; Python extensions to
+# lib/python3/dist-packages[/<package>], one or two levels further down.
+set(CMAKE_INSTALL_RPATH "$ORIGIN;$ORIGIN/../..;$ORIGIN/../../..")
 set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
 
 # Upstream packages declare cmake_minimum_required(< 3.5), which CMake 4
@@ -89,25 +91,37 @@ list(REMOVE_DUPLICATES KALIBR_ALL_INCLUDE_DIRS)
 include_directories(${KALIBR_ALL_INCLUDE_DIRS})
 set(KALIBR_ALL_INCLUDE_DIRS "${KALIBR_ALL_INCLUDE_DIRS}" CACHE INTERNAL "")
 
+# Extra arguments name files of the package that are installed separately
+# with no-ROS replacements. They must be left out of the directory install:
+# file(INSTALL) treats a destination with the same mtime as up to date, and a
+# fresh clone gives the original and its replacement identical mtimes, so the
+# replacement would silently be skipped.
 function(copy_python_package source package)
+  set(overridden "")
+  foreach(name IN LISTS ARGN)
+    list(APPEND overridden PATTERN "${name}" EXCLUDE)
+  endforeach()
   file(COPY "${source}/${package}" DESTINATION "${KALIBR_PYTHON_DIR}"
     PATTERN "__pycache__" EXCLUDE PATTERN "*.pyc" EXCLUDE)
   file(REMOVE_RECURSE "${KALIBR_PYTHON_DIR}/${package}/__pycache__")
   install(DIRECTORY "${source}/${package}" DESTINATION lib/python3/dist-packages
-    PATTERN "__pycache__" EXCLUDE PATTERN "*.pyc" EXCLUDE)
+    PATTERN "__pycache__" EXCLUDE PATTERN "*.pyc" EXCLUDE ${overridden})
 endfunction()
 
 copy_python_package("${KALIBR_UPSTREAM}/Schweizer-Messer/numpy_eigen/src" numpy_eigen)
 copy_python_package("${KALIBR_UPSTREAM}/Schweizer-Messer/sm_python/python" sm)
 copy_python_package("${KALIBR_UPSTREAM}/aslam_cv/aslam_cameras_april/python" aslam_cameras_april)
-copy_python_package("${KALIBR_UPSTREAM}/aslam_cv/aslam_cv_backend_python/python" aslam_cv_backend)
+copy_python_package("${KALIBR_UPSTREAM}/aslam_cv/aslam_cv_backend_python/python" aslam_cv_backend
+  __init__.py)
 copy_python_package("${KALIBR_UPSTREAM}/aslam_cv/aslam_cv_python/python" aslam_cv)
-copy_python_package("${KALIBR_UPSTREAM}/aslam_incremental_calibration/incremental_calibration_python/src" incremental_calibration)
+copy_python_package("${KALIBR_UPSTREAM}/aslam_incremental_calibration/incremental_calibration_python/src" incremental_calibration
+  __init__.py)
 copy_python_package("${KALIBR_UPSTREAM}/aslam_nonparametric_estimation/aslam_splines_python/python" aslam_splines)
 copy_python_package("${KALIBR_UPSTREAM}/aslam_nonparametric_estimation/bsplines_python/python" bsplines)
 copy_python_package("${KALIBR_UPSTREAM}/aslam_optimizer/aslam_backend_python/python" aslam_backend)
 copy_python_package("${KALIBR_UPSTREAM}/aslam_offline_calibration/kalibr/python" kalibr_errorterms)
-copy_python_package("${KALIBR_UPSTREAM}/aslam_offline_calibration/kalibr/python" kalibr_common)
+copy_python_package("${KALIBR_UPSTREAM}/aslam_offline_calibration/kalibr/python" kalibr_common
+  ImageDatasetReader.py ImuDatasetReader.py)
 copy_python_package("${KALIBR_UPSTREAM}/aslam_offline_calibration/kalibr/python" kalibr_camera_calibration)
 copy_python_package("${KALIBR_UPSTREAM}/aslam_offline_calibration/kalibr/python" kalibr_imu_camera_calibration)
 copy_python_package("${CMAKE_CURRENT_SOURCE_DIR}/bag_io/src" kalibr_bag_io)

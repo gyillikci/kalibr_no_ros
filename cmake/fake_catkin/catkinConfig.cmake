@@ -23,6 +23,11 @@ set(_kalibr_native_components
 foreach(component IN LISTS catkin_FIND_COMPONENTS)
   if(component IN_LIST _kalibr_native_components)
     list(APPEND catkin_LIBRARIES ${component})
+  elseif(component STREQUAL "opencv2_catkin")
+    # The catkin wrapper package exported the system OpenCV libraries. Without
+    # them, OpenCV users are underlinked and fail to load unless another
+    # library happened to pull OpenCV into the process first.
+    list(APPEND catkin_LIBRARIES ${OpenCV_LIBS})
   endif()
 endforeach()
 

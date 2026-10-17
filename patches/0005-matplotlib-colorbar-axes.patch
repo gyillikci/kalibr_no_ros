@@ -1,0 +1,28 @@
+Matplotlib 3.6 stopped guessing which Axes a colorbar for an unattached
+ScalarMappable belongs to. Pass the current Axes explicitly, which every
+Matplotlib version accepts.
+
+--- a/aslam_offline_calibration/kalibr/python/kalibr_camera_calibration/CameraUtils.py
++++ b/aslam_offline_calibration/kalibr/python/kalibr_camera_calibration/CameraUtils.py
+@@ -264,7 +264,8 @@
+ 
+     SM = pl.cm.ScalarMappable(pl.cm.colors.Normalize(0.0,len(cself.views)), pl.cm.jet)
+     SM.set_array(np.arange(len(cself.views)));
+-    cb = pl.colorbar(SM)
++    # Matplotlib >= 3.6 requires the Axes for a mappable not drawn on any.
++    cb = pl.colorbar(SM, ax=pl.gca())
+     cb.set_label('image index')
+     if not noShow:
+         pl.show()
+--- a/aslam_offline_calibration/kalibr/python/kalibr_imu_camera_calibration/IccPlots.py
++++ b/aslam_offline_calibration/kalibr/python/kalibr_imu_camera_calibration/IccPlots.py
+@@ -283,7 +283,8 @@
+     pl.ylabel('error y ($pix$)')
+     SM = pl.cm.ScalarMappable(pl.cm.colors.Normalize(0.0,numImages), pl.cm.jet)
+     SM.set_array(np.arange(numImages));
+-    cb = pl.colorbar(SM)
++    # Matplotlib >= 3.6 requires the Axes for a mappable not drawn on any.
++    cb = pl.colorbar(SM, ax=pl.gca())
+     cb.set_label('image index')
+     if not noShow:
+         pl.show()

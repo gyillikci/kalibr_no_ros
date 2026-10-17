@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 """Render a Kalibr AprilGrid seen by a known pinhole-radtan camera into a bag.
 
+With --imu the camera follows a smooth trajectory and an IMU rigidly attached
+to it is sampled from the same trajectory, so the bag also exercises
+kalibr_calibrate_imu_camera with a known camera-IMU transform.
+
 The target is drawn exactly as kalibr_create_target_pdf draws it (36h11 codes,
 two-bit black border, rotation 2, corner squares) and the grid geometry follows
 GridCalibrationTargetAprilgrid::createGridPoints. Because the true intrinsics
@@ -21,12 +25,21 @@ import yaml
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "bag_io" / "src"))
 
-from kalibr_bag_io import BagWriter, ImageRecord  # noqa: E402
+from kalibr_bag_io import BagWriter, ImageRecord, ImuRecord  # noqa: E402
 
 TARGET_PDF_SCRIPT = (
     ROOT / "upstream" / "kalibr" / "aslam_offline_calibration" / "kalibr"
     / "python" / "kalibr_create_target_pdf"
 )
+
+# Camera-from-IMU transform used in --imu mode (T_cam_imu in Kalibr's camchain).
+T_CAM_IMU = np.array([
+    [0.0148655429818, -0.999880929698, 0.00414029679422, -0.0216401454975],
+    [0.999557249008, 0.0149672133247, 0.025715529948, -0.064676986768],
+    [-0.0257744366974, 0.00375618835797, 0.999660727178, 0.00981073058949],
+    [0.0, 0.0, 0.0, 1.0],
+])
+GRAVITY_WORLD = np.array([0.0, -9.81, 0.0])  # the target hangs on a wall, +y up
 
 # EuRoC cam0, as published with the dataset.
 DEFAULT_CAMERA = {
@@ -120,6 +133,34 @@ def sample_poses(count, board_centre, rng):
     return poses
 
 
+def smooth_camera_pose(t, board_centre):
+    """World-from-camera pose of a smooth trajectory in front of the target."""
+    angles = np.array([0.30 * math.sin(2 * math.pi * 0.41 * t + 0.3),
+                       0.30 * math.sin(2 * math.pi * 0.53 * t + 1.1),
+                       0.25 * math.sin(2 * math.pi * 0.37 * t + 2.0)])
+    R = rotation(math.pi, 0.0, 0.0) @ cv2.Rodrigues(angles)[0]
+    p = board_centre + np.array([0.12 * math.sin(2 * math.pi * 0.31 * t),
+                                 0.10 * math.sin(2 * math.pi * 0.47 * t + 0.7),
+                                 0.95 + 0.15 * math.sin(2 * math.pi * 0.29 * t + 1.5)])
+    return R, p
+
+
+def imu_sample(t, board_centre, step=1e-4):
+    """Body-frame angular velocity and specific force of the attached IMU."""
+    R_ci, t_ci = T_CAM_IMU[:3, :3], T_CAM_IMU[:3, 3]
+
+    def imu_pose(time):
+        R_wc, p_wc = smooth_camera_pose(time, board_centre)
+        return R_wc @ R_ci, p_wc + R_wc @ t_ci
+
+    R_prev, p_prev = imu_pose(t - step)
+    R_now, p_now = imu_pose(t)
+    R_next, p_next = imu_pose(t + step)
+    omega = cv2.Rodrigues(R_prev.T @ R_next)[0].ravel() / (2 * step)
+    accel_world = (p_next - 2 * p_now + p_prev) / step ** 2
+    return omega, R_now.T @ (accel_world - GRAVITY_WORLD)
+
+
 def distortion_maps(K, D, width, height, scale):
     """For each distorted output pixel, its location in the ideal image."""
     u, v = np.meshgrid(np.arange(width, dtype=np.float64),
@@ -142,6 +183,10 @@ def main():
     parser.add_argument("--topic", default="/cam0/image_raw")
     parser.add_argument("--frames", type=int, default=60)
     parser.add_argument("--rate", type=float, default=4.0, help="frames per second")
+    parser.add_argument("--imu", action="store_true",
+                        help="smooth motion plus an IMU on --imu-topic")
+    parser.add_argument("--imu-topic", default="/imu0")
+    parser.add_argument("--imu-rate", type=float, default=200.0)
     parser.add_argument("--seed", type=int, default=7)
     parser.add_argument("--noise", type=float, default=1.5, help="pixel noise sigma")
     args = parser.parse_args()
@@ -166,11 +211,33 @@ def main():
     map_x, map_y = distortion_maps(K, D, width, height, scale)
 
     rng = np.random.default_rng(args.seed)
-    poses = sample_poses(args.frames, board_centre, rng)
     period_ns = int(round(1e9 / args.rate))
     start_ns = 1_403_715_000_000_000_000
+    if args.imu:
+        poses = []
+        for index in range(args.frames):
+            R_wc, p_wc = smooth_camera_pose(index * period_ns * 1e-9, board_centre)
+            poses.append((R_wc.T, -R_wc.T @ p_wc))  # target is the world frame
+    else:
+        poses = sample_poses(args.frames, board_centre, rng)
+
+    # Discrete white noise matching the densities written to the IMU YAML.
+    gyro_density, accel_density = 1.0e-3, 1.0e-2
 
     with BagWriter(args.output) as writer:
+        if args.imu:
+            imu_period_ns = int(round(1e9 / args.imu_rate))
+            imu_count = (args.frames - 1) * period_ns // imu_period_ns + 1
+            sqrt_rate = math.sqrt(args.imu_rate)
+            for index in range(imu_count):
+                stamp = start_ns + index * imu_period_ns
+                omega, accel = imu_sample(index * imu_period_ns * 1e-9, board_centre)
+                omega = omega + rng.normal(0.0, gyro_density * sqrt_rate, 3)
+                accel = accel + rng.normal(0.0, accel_density * sqrt_rate, 3)
+                writer.write_imu(args.imu_topic, ImuRecord(
+                    header_timestamp_ns=stamp, record_timestamp_ns=stamp,
+                    angular_velocity=omega, linear_acceleration=accel,
+                    frame_id="imu0", sequence=index))
         for index, (R, t) in enumerate(poses):
             H = K_ss @ np.column_stack([R[:, 0], R[:, 1], t]) @ texture_to_metric
             ideal = cv2.warpPerspective(
@@ -190,10 +257,21 @@ def main():
         "target_type": "aprilgrid", "tagCols": cols, "tagRows": rows,
         "tagSize": tag_size, "tagSpacing": spacing,
     }, sort_keys=False))
-    Path(args.truth).write_text(yaml.safe_dump({
-        "camera_model": "pinhole", "distortion_model": "radtan",
-        **DEFAULT_CAMERA, "rostopic": args.topic,
-    }, sort_keys=False))
+    camera = {"camera_model": "pinhole", "distortion_model": "radtan",
+              **DEFAULT_CAMERA, "rostopic": args.topic}
+    if args.imu:
+        camera["T_cam_imu"] = T_CAM_IMU.tolist()
+        camera["timeshift_cam_imu"] = 0.0
+        imu_yaml = Path(args.truth).with_name("imu.yaml")
+        imu_yaml.write_text(yaml.safe_dump({
+            "rostopic": args.imu_topic, "update_rate": args.imu_rate,
+            "accelerometer_noise_density": accel_density,
+            "accelerometer_random_walk": 2.0e-4,
+            "gyroscope_noise_density": gyro_density,
+            "gyroscope_random_walk": 4.0e-6,
+        }, sort_keys=False))
+    # Kalibr camchain layout, usable directly as --cams for the IMU tool.
+    Path(args.truth).write_text(yaml.safe_dump({"cam0": camera}, sort_keys=False))
     print("wrote {} frames to {}".format(len(poses), args.output))
 
 
