@@ -1,0 +1,57 @@
+Boost 1.73 removed boost/detail/endian.hpp. Detect byte order through
+Boost.Predef, available since Boost 1.55.
+
+diff --git a/Schweizer-Messer/sm_boost/include/boost/portable_binary_archive.hpp b/Schweizer-Messer/sm_boost/include/boost/portable_binary_archive.hpp
+index 4efa42c..a1c3ce3 100755
+--- a/Schweizer-Messer/sm_boost/include/boost/portable_binary_archive.hpp
++++ b/Schweizer-Messer/sm_boost/include/boost/portable_binary_archive.hpp
+@@ -28,7 +28,7 @@
+ #endif
+ 
+ #include <boost/archive/basic_archive.hpp>
+-#include <boost/detail/endian.hpp>
++#include <boost/predef/other/endian.h>
+ 
+ 
+ namespace boost {
+diff --git a/Schweizer-Messer/sm_boost/src/portable_binary_iarchive.cpp b/Schweizer-Messer/sm_boost/src/portable_binary_iarchive.cpp
+index 9c31597..e49aa76 100755
+--- a/Schweizer-Messer/sm_boost/src/portable_binary_iarchive.cpp
++++ b/Schweizer-Messer/sm_boost/src/portable_binary_iarchive.cpp
+@@ -39,12 +39,12 @@ portable_binary_iarchive::load_impl(boost::intmax_t & l, char maxsize){
+         );
+ 
+     char * cptr = reinterpret_cast<char *>(& l);
+-    #ifdef BOOST_BIG_ENDIAN
++    #if BOOST_ENDIAN_BIG_BYTE
+         cptr += (sizeof(boost::intmax_t) - size);
+     #endif
+     this->primitive_base_t::load_binary(cptr, size);
+ 
+-    #ifdef BOOST_BIG_ENDIAN
++    #if BOOST_ENDIAN_BIG_BYTE
+         if(m_flags & endian_little)
+     #else
+         if(m_flags & endian_big)
+diff --git a/Schweizer-Messer/sm_boost/src/portable_binary_oarchive.cpp b/Schweizer-Messer/sm_boost/src/portable_binary_oarchive.cpp
+index afca220..b85192e 100755
+--- a/Schweizer-Messer/sm_boost/src/portable_binary_oarchive.cpp
++++ b/Schweizer-Messer/sm_boost/src/portable_binary_oarchive.cpp
+@@ -9,7 +9,7 @@
+ //  See http://www.boost.org for updates, documentation, and revision history.
+ 
+ #include <ostream>
+-#include <boost/detail/endian.hpp>
++#include <boost/predef/other/endian.h>
+ #include <boost/portable_binary_oarchive.hpp>
+ 
+ namespace boost {
+@@ -48,7 +48,7 @@ portable_binary_oarchive::save_impl(
+     else
+         ll = l;
+     char * cptr = reinterpret_cast<char *>(& ll);
+-    #ifdef BOOST_BIG_ENDIAN
++    #if BOOST_ENDIAN_BIG_BYTE
+         cptr += (sizeof(boost::intmax_t) - size);
+         if(m_flags & endian_little)
+             reverse_bytes(size, cptr);

@@ -1,0 +1,103 @@
+SuiteSparse 7 (SPQR 4) removed CHOLMOD_INTLONG, templated the SPQR API on the
+index type and stopped installing the internal spqr.hpp header. Every change
+is guarded so that SuiteSparse 5 builds exactly the original code.
+
+diff --git a/aslam_incremental_calibration/incremental_calibration/include/aslam/calibration/algorithms/linalg.h b/aslam_incremental_calibration/incremental_calibration/include/aslam/calibration/algorithms/linalg.h
+index db6d3b7..5d8c3a3 100644
+--- a/aslam_incremental_calibration/incremental_calibration/include/aslam/calibration/algorithms/linalg.h
++++ b/aslam_incremental_calibration/incremental_calibration/include/aslam/calibration/algorithms/linalg.h
+@@ -35,7 +35,9 @@ struct cholmod_dense_struct;
+ typedef cholmod_dense_struct cholmod_dense;
+ struct cholmod_common_struct;
+ typedef cholmod_common_struct cholmod_common;
+-template <typename Entry> struct SuiteSparseQR_factorization;
++// SPQR 4 (SuiteSparse 7) adds an index-type template parameter, so a
++// one-parameter forward declaration conflicts with it. Use the real one.
++#include <SuiteSparseQR.hpp>
+ 
+ namespace aslam {
+   namespace calibration {
+diff --git a/aslam_incremental_calibration/incremental_calibration/include/aslam/calibration/core/LinearSolver.h b/aslam_incremental_calibration/incremental_calibration/include/aslam/calibration/core/LinearSolver.h
+index dbda4c8..7f658a3 100644
+--- a/aslam_incremental_calibration/incremental_calibration/include/aslam/calibration/core/LinearSolver.h
++++ b/aslam_incremental_calibration/incremental_calibration/include/aslam/calibration/core/LinearSolver.h
+@@ -38,7 +38,9 @@
+ 
+ #include "aslam/calibration/core/LinearSolverOptions.h"
+ 
+-template <typename Entry> struct SuiteSparseQR_factorization;
++// SPQR 4 (SuiteSparse 7) adds an index-type template parameter, so a
++// one-parameter forward declaration conflicts with it. Use the real one.
++#include <SuiteSparseQR.hpp>
+ 
+ namespace sm {
+ 
+diff --git a/aslam_incremental_calibration/incremental_calibration/src/algorithms/linalg.cpp b/aslam_incremental_calibration/incremental_calibration/src/algorithms/linalg.cpp
+index 71a4158..1954cef 100644
+--- a/aslam_incremental_calibration/incremental_calibration/src/algorithms/linalg.cpp
++++ b/aslam_incremental_calibration/incremental_calibration/src/algorithms/linalg.cpp
+@@ -26,7 +26,16 @@
+ 
+ #include <cholmod.h>
+ #include <SuiteSparseQR.hpp>
++#if defined(SPQR_MAIN_VERSION) && SPQR_MAIN_VERSION >= 4
++// SuiteSparse 7 no longer installs the internal spqr.hpp header, but libspqr
++// still exports this instantiation.
++template <typename Entry, typename Int>
++double spqr_maxcolnorm(cholmod_sparse* A, cholmod_common* cc);
++#define KALIBR_SPQR_MAXCOLNORM spqr_maxcolnorm<double, SuiteSparse_long>
++#else
+ #include <spqr.hpp>
++#define KALIBR_SPQR_MAXCOLNORM spqr_maxcolnorm<double>
++#endif
+ 
+ #include "aslam/calibration/exceptions/OutOfBoundException.h"
+ #include "aslam/calibration/exceptions/InvalidOperationException.h"
+@@ -269,7 +278,7 @@ namespace aslam {
+         throw NullPointerException("cholmod", __FILE__, __LINE__,
+           __PRETTY_FUNCTION__);
+       return 20.0 * static_cast<double>(A->nrow + A->ncol) * eps *
+-        spqr_maxcolnorm<double>(A, cholmod);
++        KALIBR_SPQR_MAXCOLNORM(A, cholmod);
+     }
+ 
+     double svGap(const Eigen::VectorXd& sv, std::ptrdiff_t rank) {
+diff --git a/aslam_optimizer/aslam_backend/include/aslam/backend/implementation/Cholmod.hpp b/aslam_optimizer/aslam_backend/include/aslam/backend/implementation/Cholmod.hpp
+index 6c7186a..32906fb 100644
+--- a/aslam_optimizer/aslam_backend/include/aslam/backend/implementation/Cholmod.hpp
++++ b/aslam_optimizer/aslam_backend/include/aslam/backend/implementation/Cholmod.hpp
+@@ -445,8 +445,16 @@ namespace aslam {
+     template<typename I>
+     void Cholmod<I>::getR(cholmod_sparse* A, cholmod_sparse** R) {
+       cholmod_sparse* qrJ = cholmod_l_transpose(A, 1, &_cholmod);
++#if defined(SPQR_MAIN_VERSION) && SPQR_MAIN_VERSION >= 4
++      // SPQR 4 (SuiteSparse 7) templates this overload on the index type,
++      // which cannot be deduced from the NULL arguments.
++      SuiteSparseQR<double, SuiteSparse_long>(SPQR_ORDERING_FIXED, SPQR_NO_TOL,
++        static_cast<SuiteSparse_long>(qrJ->ncol), 0,
++        qrJ, NULL, NULL, NULL, NULL, R, NULL, NULL, NULL, NULL, &_cholmod);
++#else
+       SuiteSparseQR<double>(SPQR_ORDERING_FIXED, SPQR_NO_TOL, qrJ->ncol, 0,
+         qrJ, NULL, NULL, NULL, NULL, R, NULL, NULL, NULL, NULL, &_cholmod);
++#endif
+       SM_ASSERT_EQ(Exception, _cholmod.status, CHOLMOD_OK,
+         "QR factorization failed");
+       CholmodIndexTraits<index_t>::free_sparse(&qrJ, &_cholmod);
+diff --git a/aslam_optimizer/sparse_block_matrix/include/sparse_block_matrix/sparse_helper.h b/aslam_optimizer/sparse_block_matrix/include/sparse_block_matrix/sparse_helper.h
+index 0a6a87c..0c94d39 100755
+--- a/aslam_optimizer/sparse_block_matrix/include/sparse_block_matrix/sparse_helper.h
++++ b/aslam_optimizer/sparse_block_matrix/include/sparse_block_matrix/sparse_helper.h
+@@ -75,7 +75,13 @@ namespace {
+   template<>
+   struct IntType< long >
+   {
++#ifdef CHOLMOD_INTLONG
+       static const int intType = CHOLMOD_INTLONG;
++#else
++      // SuiteSparse 7 removed the mixed int/long index type. Both index
++      // arrays of CholmodExt<long> are long, which is CHOLMOD_LONG.
++      static const int intType = CHOLMOD_LONG;
++#endif
+   };
+   template<>
+   struct IntType< int >

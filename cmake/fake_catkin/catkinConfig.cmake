@@ -63,7 +63,7 @@ function(add_python_export_library target python_module_directory)
   # SHARED exactly as the original helper does rather than CMake MODULE.
   add_library(${target} SHARED ${ARGN})
   target_include_directories(${target} PRIVATE ${PYTHON_INCLUDE_DIRS} ${NUMPY_INCLUDE_DIR})
-  target_link_libraries(${target} ${PYTHON_LIBRARY} ${Boost_PYTHON38_LIBRARY} ${catkin_LIBRARIES})
+  target_link_libraries(${target} ${PYTHON_LIBRARY} ${KALIBR_BOOST_PYTHON_LIBRARY} ${catkin_LIBRARIES})
   set_target_properties(${target} PROPERTIES
     LIBRARY_OUTPUT_DIRECTORY "${_output_directory}"
   )

@@ -12,7 +12,19 @@ set(CMAKE_BUILD_RPATH "${CMAKE_BINARY_DIR};${CMAKE_BINARY_DIR}/lib")
 set(CMAKE_INSTALL_RPATH "$ORIGIN;$ORIGIN/../lib;$ORIGIN/../../lib")
 set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
 
-set(KALIBR_UPSTREAM "${CMAKE_CURRENT_SOURCE_DIR}/upstream/kalibr")
+# Upstream packages declare cmake_minimum_required(< 3.5), which CMake 4
+# rejects. Raise only the policy floor; the packages' own logic is unchanged.
+set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
+
+# The checked-in snapshot stays byte-for-byte upstream. Portability fixes for
+# newer toolchains live as reviewed patches in patches/ and are applied to a
+# build-tree copy, which is what actually gets compiled.
+set(KALIBR_UPSTREAM_PRISTINE "${CMAKE_CURRENT_SOURCE_DIR}/upstream/kalibr")
+set(KALIBR_UPSTREAM "${CMAKE_BINARY_DIR}/upstream/kalibr")
+include(cmake/ApplyUpstreamPatches.cmake)
+kalibr_apply_upstream_patches(
+  "${KALIBR_UPSTREAM_PRISTINE}" "${KALIBR_UPSTREAM}"
+  "${CMAKE_CURRENT_SOURCE_DIR}/patches")
 set(KALIBR_PYTHON_DIR "${CMAKE_BINARY_DIR}/python")
 set(KALIBR_LIBEXEC_DIR "${CMAKE_BINARY_DIR}/libexec/kalibr")
 file(MAKE_DIRECTORY "${KALIBR_PYTHON_DIR}" "${KALIBR_LIBEXEC_DIR}" "${CMAKE_BINARY_DIR}/bin")
@@ -28,12 +40,21 @@ list(PREPEND CMAKE_MODULE_PATH
 )
 
 find_package(PythonInterp 3.8 REQUIRED)
-find_package(PythonLibs 3.8 REQUIRED)
+find_package(PythonLibs
+  "${PYTHON_VERSION_MAJOR}.${PYTHON_VERSION_MINOR}" EXACT REQUIRED)
+set(KALIBR_BOOST_PYTHON "python${PYTHON_VERSION_MAJOR}${PYTHON_VERSION_MINOR}")
 find_package(Eigen3 REQUIRED)
 find_package(OpenCV 4.2 REQUIRED)
+find_package(Boost 1.71 CONFIG QUIET)
+if(Boost_FOUND AND Boost_VERSION VERSION_GREATER_EQUAL 1.89)
+  set(boost_system_DIR "${CMAKE_CURRENT_SOURCE_DIR}/cmake/compat/boost_system"
+    CACHE PATH "" FORCE)
+endif()
 find_package(Boost 1.71 REQUIRED COMPONENTS
-  filesystem python38 regex serialization system thread
+  filesystem ${KALIBR_BOOST_PYTHON} regex serialization system thread
 )
+string(TOUPPER "${KALIBR_BOOST_PYTHON}" _boost_python_upper)
+set(KALIBR_BOOST_PYTHON_LIBRARY "${Boost_${_boost_python_upper}_LIBRARY}")
 find_package(SuiteSparse REQUIRED)
 find_library(TBB_LIBRARY NAMES tbb REQUIRED)
 set(TBB_LIBRARIES "${TBB_LIBRARY}" CACHE STRING "" FORCE)
@@ -165,40 +186,40 @@ install(CODE [[
 
 if(KALIBR_BUILD_NATIVE)
   # Topological order from the upstream package.xml dependency graph.
-  add_subdirectory(upstream/kalibr/aslam_cv/aslam_time native/aslam_time)
-  add_subdirectory(upstream/kalibr/aslam_offline_calibration/ethz_apriltag2 native/ethz_apriltag2)
-  add_subdirectory(upstream/kalibr/Schweizer-Messer/python_module native/python_module)
+  add_subdirectory(${KALIBR_UPSTREAM}/aslam_cv/aslam_time native/aslam_time)
+  add_subdirectory(${KALIBR_UPSTREAM}/aslam_offline_calibration/ethz_apriltag2 native/ethz_apriltag2)
+  add_subdirectory(${KALIBR_UPSTREAM}/Schweizer-Messer/python_module native/python_module)
   # Upstream's generated numpy_eigen test module is unconditional and very
   # large. Excluding the directory from ALL keeps that test out; dependencies
   # still pull the actual numpy_eigen extension into the calibration build.
-  add_subdirectory(upstream/kalibr/Schweizer-Messer/numpy_eigen native/numpy_eigen EXCLUDE_FROM_ALL)
+  add_subdirectory(${KALIBR_UPSTREAM}/Schweizer-Messer/numpy_eigen native/numpy_eigen EXCLUDE_FROM_ALL)
   install(TARGETS numpy_eigen
     LIBRARY DESTINATION lib/python3/dist-packages/numpy_eigen)
-  add_subdirectory(upstream/kalibr/Schweizer-Messer/sm_common native/sm_common)
-  add_subdirectory(upstream/kalibr/Schweizer-Messer/sm_boost native/sm_boost)
-  add_subdirectory(upstream/kalibr/Schweizer-Messer/sm_logging native/sm_logging)
-  add_subdirectory(upstream/kalibr/Schweizer-Messer/sm_matrix_archive native/sm_matrix_archive)
-  add_subdirectory(upstream/kalibr/Schweizer-Messer/sm_opencv native/sm_opencv)
-  add_subdirectory(upstream/kalibr/Schweizer-Messer/sm_property_tree native/sm_property_tree)
-  add_subdirectory(upstream/kalibr/Schweizer-Messer/sm_random native/sm_random)
-  add_subdirectory(upstream/kalibr/Schweizer-Messer/sm_eigen native/sm_eigen)
-  add_subdirectory(upstream/kalibr/Schweizer-Messer/sm_kinematics native/sm_kinematics)
-  add_subdirectory(upstream/kalibr/aslam_cv/aslam_cameras native/aslam_cameras)
-  add_subdirectory(upstream/kalibr/aslam_cv/aslam_cv_serialization native/aslam_cv_serialization)
-  add_subdirectory(upstream/kalibr/aslam_cv/aslam_imgproc native/aslam_imgproc)
-  add_subdirectory(upstream/kalibr/Schweizer-Messer/sm_timing native/sm_timing)
-  add_subdirectory(upstream/kalibr/Schweizer-Messer/sm_python native/sm_python)
-  add_subdirectory(upstream/kalibr/aslam_cv/aslam_cameras_april native/aslam_cameras_april)
-  add_subdirectory(upstream/kalibr/aslam_cv/aslam_cv_python native/aslam_cv_python)
-  add_subdirectory(upstream/kalibr/aslam_optimizer/sparse_block_matrix native/sparse_block_matrix)
-  add_subdirectory(upstream/kalibr/aslam_optimizer/aslam_backend native/aslam_backend)
-  add_subdirectory(upstream/kalibr/aslam_optimizer/aslam_backend_expressions native/aslam_backend_expressions)
-  add_subdirectory(upstream/kalibr/aslam_optimizer/aslam_backend_python native/aslam_backend_python)
-  add_subdirectory(upstream/kalibr/aslam_cv/aslam_cv_backend native/aslam_cv_backend)
-  add_subdirectory(upstream/kalibr/aslam_nonparametric_estimation/bsplines native/bsplines)
-  add_subdirectory(upstream/kalibr/aslam_nonparametric_estimation/aslam_splines native/aslam_splines)
-  add_subdirectory(upstream/kalibr/aslam_cv/aslam_cv_error_terms native/aslam_cv_error_terms)
-  add_subdirectory(upstream/kalibr/aslam_cv/aslam_cv_backend_python native/aslam_cv_backend_python)
+  add_subdirectory(${KALIBR_UPSTREAM}/Schweizer-Messer/sm_common native/sm_common)
+  add_subdirectory(${KALIBR_UPSTREAM}/Schweizer-Messer/sm_boost native/sm_boost)
+  add_subdirectory(${KALIBR_UPSTREAM}/Schweizer-Messer/sm_logging native/sm_logging)
+  add_subdirectory(${KALIBR_UPSTREAM}/Schweizer-Messer/sm_matrix_archive native/sm_matrix_archive)
+  add_subdirectory(${KALIBR_UPSTREAM}/Schweizer-Messer/sm_opencv native/sm_opencv)
+  add_subdirectory(${KALIBR_UPSTREAM}/Schweizer-Messer/sm_property_tree native/sm_property_tree)
+  add_subdirectory(${KALIBR_UPSTREAM}/Schweizer-Messer/sm_random native/sm_random)
+  add_subdirectory(${KALIBR_UPSTREAM}/Schweizer-Messer/sm_eigen native/sm_eigen)
+  add_subdirectory(${KALIBR_UPSTREAM}/Schweizer-Messer/sm_kinematics native/sm_kinematics)
+  add_subdirectory(${KALIBR_UPSTREAM}/aslam_cv/aslam_cameras native/aslam_cameras)
+  add_subdirectory(${KALIBR_UPSTREAM}/aslam_cv/aslam_cv_serialization native/aslam_cv_serialization)
+  add_subdirectory(${KALIBR_UPSTREAM}/aslam_cv/aslam_imgproc native/aslam_imgproc)
+  add_subdirectory(${KALIBR_UPSTREAM}/Schweizer-Messer/sm_timing native/sm_timing)
+  add_subdirectory(${KALIBR_UPSTREAM}/Schweizer-Messer/sm_python native/sm_python)
+  add_subdirectory(${KALIBR_UPSTREAM}/aslam_cv/aslam_cameras_april native/aslam_cameras_april)
+  add_subdirectory(${KALIBR_UPSTREAM}/aslam_cv/aslam_cv_python native/aslam_cv_python)
+  add_subdirectory(${KALIBR_UPSTREAM}/aslam_optimizer/sparse_block_matrix native/sparse_block_matrix)
+  add_subdirectory(${KALIBR_UPSTREAM}/aslam_optimizer/aslam_backend native/aslam_backend)
+  add_subdirectory(${KALIBR_UPSTREAM}/aslam_optimizer/aslam_backend_expressions native/aslam_backend_expressions)
+  add_subdirectory(${KALIBR_UPSTREAM}/aslam_optimizer/aslam_backend_python native/aslam_backend_python)
+  add_subdirectory(${KALIBR_UPSTREAM}/aslam_cv/aslam_cv_backend native/aslam_cv_backend)
+  add_subdirectory(${KALIBR_UPSTREAM}/aslam_nonparametric_estimation/bsplines native/bsplines)
+  add_subdirectory(${KALIBR_UPSTREAM}/aslam_nonparametric_estimation/aslam_splines native/aslam_splines)
+  add_subdirectory(${KALIBR_UPSTREAM}/aslam_cv/aslam_cv_error_terms native/aslam_cv_error_terms)
+  add_subdirectory(${KALIBR_UPSTREAM}/aslam_cv/aslam_cv_backend_python native/aslam_cv_backend_python)
 
   # OpenCV-compatible [k1, k2, p1, p2, k3] support is an out-of-tree
   # extension.  The copied Kalibr source remains byte-for-byte unchanged.
@@ -221,16 +242,16 @@ if(KALIBR_BUILD_NATIVE)
     aslam_backend aslam_backend_expressions aslam_cv_python aslam_cameras
     aslam_splines sm_python numpy_eigen ${Boost_LIBRARIES})
 
-  add_subdirectory(upstream/kalibr/aslam_nonparametric_estimation/bsplines_python native/bsplines_python)
-  add_subdirectory(upstream/kalibr/aslam_nonparametric_estimation/aslam_splines_python native/aslam_splines_python)
+  add_subdirectory(${KALIBR_UPSTREAM}/aslam_nonparametric_estimation/bsplines_python native/bsplines_python)
+  add_subdirectory(${KALIBR_UPSTREAM}/aslam_nonparametric_estimation/aslam_splines_python native/aslam_splines_python)
   # Two upstream packages publish a header with this same include name. Catkin
   # propagates only the declared dependency here, so aslam_splines' current
   # implementation wins. Recreate that target-local ordering explicitly.
   target_include_directories(aslam_splines_python BEFORE PRIVATE
     "${KALIBR_UPSTREAM}/aslam_nonparametric_estimation/aslam_splines/include")
-  add_subdirectory(upstream/kalibr/aslam_incremental_calibration/incremental_calibration native/incremental_calibration)
-  add_subdirectory(upstream/kalibr/aslam_incremental_calibration/incremental_calibration_python native/incremental_calibration_python)
-  add_subdirectory(upstream/kalibr/aslam_offline_calibration/kalibr native/kalibr)
+  add_subdirectory(${KALIBR_UPSTREAM}/aslam_incremental_calibration/incremental_calibration native/incremental_calibration)
+  add_subdirectory(${KALIBR_UPSTREAM}/aslam_incremental_calibration/incremental_calibration_python native/incremental_calibration_python)
+  add_subdirectory(${KALIBR_UPSTREAM}/aslam_offline_calibration/kalibr native/kalibr)
 endif()
 
 enable_testing()

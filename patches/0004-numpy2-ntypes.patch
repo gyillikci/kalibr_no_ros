@@ -1,0 +1,22 @@
+NumPy 2 renamed NPY_NTYPES to NPY_NTYPES_LEGACY. Guarded on NPY_ABI_VERSION
+so NumPy 1 builds the original code.
+
+diff --git a/Schweizer-Messer/numpy_eigen/include/numpy_eigen/type_traits.hpp b/Schweizer-Messer/numpy_eigen/include/numpy_eigen/type_traits.hpp
+index 75686b3..22dffbc 100755
+--- a/Schweizer-Messer/numpy_eigen/include/numpy_eigen/type_traits.hpp
++++ b/Schweizer-Messer/numpy_eigen/include/numpy_eigen/type_traits.hpp
+@@ -132,8 +132,14 @@ inline const char * npyTypeToString(int npyType)
+       return "NPY_UNICODE";
+     case NPY_VOID:
+       return "NPY_VOID";
++#if NPY_ABI_VERSION < 0x02000000
+     case NPY_NTYPES:
+       return "NPY_NTYPES";
++#else
++    // NumPy 2 renamed the enum terminator to NPY_NTYPES_LEGACY.
++    case NPY_NTYPES_LEGACY:
++      return "NPY_NTYPES_LEGACY";
++#endif
+     case NPY_NOTYPE:
+       return "NPY_NOTYPE";
+     default:

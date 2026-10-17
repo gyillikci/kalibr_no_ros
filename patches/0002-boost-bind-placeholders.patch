@@ -1,0 +1,30 @@
+Boost 1.73 stopped injecting the boost::bind placeholders _1, _2, ... into
+the global namespace. Import boost::placeholders, available since Boost 1.60.
+
+diff --git a/aslam_nonparametric_estimation/bsplines_python/src/BSplinePython.cpp b/aslam_nonparametric_estimation/bsplines_python/src/BSplinePython.cpp
+index 32d9a92..21646b6 100644
+--- a/aslam_nonparametric_estimation/bsplines_python/src/BSplinePython.cpp
++++ b/aslam_nonparametric_estimation/bsplines_python/src/BSplinePython.cpp
+@@ -4,6 +4,8 @@
+ 
+ using namespace bsplines;
+ using namespace boost::python;
++// Boost >= 1.73 no longer injects _1, _2, ... into the global namespace.
++using namespace boost::placeholders;
+ 
+   // Function wrappers turn std::pairs into tuples.
+ boost::python::tuple timeInterval1(const bsplines::BSpline * bs)
+diff --git a/aslam_optimizer/aslam_backend/src/DenseQrLinearSystemSolver.cpp b/aslam_optimizer/aslam_backend/src/DenseQrLinearSystemSolver.cpp
+index 5ceba5b..56c0697 100644
+--- a/aslam_optimizer/aslam_backend/src/DenseQrLinearSystemSolver.cpp
++++ b/aslam_optimizer/aslam_backend/src/DenseQrLinearSystemSolver.cpp
+@@ -2,6 +2,9 @@
+ #include <aslam/backend/ErrorTerm.hpp>
+ #include <Eigen/Dense> // householderQr.solve
+ #include <sm/PropertyTree.hpp>
++#include <boost/bind/bind.hpp>
++// Boost >= 1.73 no longer injects _1, _2, ... into the global namespace.
++using namespace boost::placeholders;
+ 
+ namespace aslam {
+   namespace backend {
