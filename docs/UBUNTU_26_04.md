@@ -96,6 +96,23 @@ IMU with white noise matching the IMU YAML):
 Normalized gyroscope and accelerometer residuals are about 1.1, consistent
 with the injected noise. The PDF report is generated.
 
+## Cross-release check on Ubuntu 20.04
+
+The same branch was built from a fresh clone in a clean Ubuntu 20.04 root
+filesystem (CMake 3.16, Python 3.8, Boost 1.71, SuiteSparse 5.7, NumPy 1.17).
+All five patches apply, the build and all CTest suites pass, and the same
+synthetic bags give matching results:
+
+| Result | 20.04 | 26.04 |
+| --- | --- | --- |
+| fu, fv | 458.682934, 457.312740 | 458.682937, 457.312744 |
+| cu, cv | 367.168023, 248.340213 | 367.168025, 248.340210 |
+| `T_cam_imu` rotation / translation error | 0.014956° / 1.6954 mm | 0.014956° / 1.6954 mm |
+| Time offset | -8.1743e-06 s | -8.1747e-06 s |
+
+The intrinsics differ by about 3e-6 px, which is floating-point and
+compiler noise between GCC 9 / Eigen 3.3 and GCC 15 / Eigen 3.4.
+
 ## Known limits
 
 - Upstream libraries `bsplines`, `aslam_imgproc` and `aslam_cv_backend` are

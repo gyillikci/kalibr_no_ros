@@ -24,7 +24,7 @@ compile the original code.
 | Ubuntu | Python | Boost | SuiteSparse | NumPy | CMake | Status |
 | --- | --- | --- | --- | --- | --- | --- |
 | 20.04 | 3.8 | 1.71 | 5.7 | 1.17 | 3.16 | Original validation baseline (EuRoC, see `docs/STATUS.md`) |
-| 26.04 | 3.14 | 1.90 | 7.12 | 2.3 | 4.2 | Build, CTest and synthetic end-to-end calibration (see `docs/UBUNTU_26_04.md`) |
+| 26.04 | 3.14 | 1.90 | 7.12 | 2.3 | 4.2 | Build, CTest, synthetic camera and IMU-camera calibration; matches 20.04 (see `docs/UBUNTU_26_04.md`) |
 
 Neither ROS nor Docker is required on either.
 
