@@ -179,6 +179,11 @@ function(prepare_cli name)
       content "${content}")
   endif()
   file(WRITE "${KALIBR_LIBEXEC_DIR}/${name}" "${content}")
+  install_cli(${name})
+endfunction()
+
+# Installs libexec/kalibr/<name> and its relocatable bin/<name> launcher.
+function(install_cli name)
   file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/scripts/kalibr_launcher.py"
     DESTINATION "${CMAKE_BINARY_DIR}/bin")
   file(RENAME "${CMAKE_BINARY_DIR}/bin/kalibr_launcher.py" "${CMAKE_BINARY_DIR}/bin/${name}")
@@ -192,6 +197,10 @@ prepare_cli(kalibr_calibrate_cameras)
 prepare_cli(kalibr_calibrate_imu_camera)
 prepare_cli(kalibr_visualize_calibration)
 prepare_cli(kalibr_visualize_distortion)
+
+file(WRITE "${KALIBR_LIBEXEC_DIR}/kalibr_supervise"
+  "from kalibr_no_ros.supervisor import main\n\nraise SystemExit(main())\n")
+install_cli(kalibr_supervise)
 
 # Only the offline calibration and visualization commands are installed.
 # Remove stale programs left by an earlier install tree when reconfiguring.

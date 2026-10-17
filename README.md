@@ -216,5 +216,27 @@ To create a rosbag2 SQLite3 copy without installing ROS2:
 python3 -m rosbags.convert input.bag --dst output_ros2
 ```
 
+## Pause, resume and cancel a run
+
+`kalibr_supervise` runs any Kalibr command in its own process group and
+controls the whole group, so it reaches every extraction process and every
+optimizer thread without knowing how many there are. Pause is `SIGSTOP`,
+resume is `SIGCONT`, and cancel is `SIGTERM` followed by `SIGKILL` after
+`--cancel-timeout` seconds.
+
+```bash
+kalibr_supervise --log run.log -- kalibr_calibrate_imu_camera \
+  --target aprilgrid.yaml --imu imu.yaml --cams camchain.yaml \
+  --bag data.bag --dont-show-report
+```
+
+While it runs, type `p` (pause), `r` (resume), `c` (cancel) or `s` (status)
+and press Enter. Ctrl+C cancels; a second Ctrl+C kills at once. Programs can
+use `kalibr_no_ros.supervisor.CalibrationSupervisor` directly, which offers
+the same operations plus state, progress and output callbacks.
+
+A paused run keeps its memory, and a cancelled run leaves no results. POSIX
+only.
+
 See `docs/STATUS.md` for the validated boundary, numerical baseline, and known
 limits.
